@@ -117,7 +117,12 @@ async def crop_square(file: UploadFile, quality: int = 85):
 
 
 @app.post("/crop")
-async def crop(file: UploadFile, box: tuple[float, float, float, float]):
+async def crop(
+    file: UploadFile, box: tuple[float, float, float, float], quality: int = 85
+):
+    """
+    Endpoint that crops and image according to passed in coordinates in the order Left, top, right, bottom.
+    """
     if file.content_type is None or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
@@ -129,7 +134,9 @@ async def crop(file: UploadFile, box: tuple[float, float, float, float]):
                 background = Image.new("RGB", img.size, (255, 255, 255))
                 background.paste(img, mask=img.getchannel("A"))
                 img = background
-
+            cropped = img.crop(box)
+            output_buffer = BytesIO()
+            cropped.save(output_buffer, format="WEBP", quality=quality, optimize=True)
     except Exception as exc:
         raise HTTPException(400, str(exc))
 
