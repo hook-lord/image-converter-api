@@ -1,3 +1,4 @@
+from typing import Tuple
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from PIL import Image
@@ -7,7 +8,7 @@ import logging
 app = FastAPI()
 
 
-async def process_image_in_memory(
+async def resize_in_memory(
     image_data: bytes,
     max_width: int = 800,
     quality: int = 85,
@@ -67,7 +68,7 @@ async def resize_image(file: UploadFile, max_width: int = 800, quality: int = 85
     contents = await file.read()
 
     # Process the image
-    processed_image = await process_image_in_memory(
+    processed_image = await resize_in_memory(
         contents, max_width=max_width, quality=quality
     )
 
@@ -115,24 +116,25 @@ async def crop_square(file: UploadFile, quality: int = 85):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/crop")
+async def crop(file: UploadFile, box: tuple[float, float, float, float]):
+    if file.content_type is None or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    try:
+        contents = await file.read()
+
+        with Image.open(BytesIO(contents)) as img:
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                background.paste(img, mask=img.getchannel("A"))
+                img = background
+
+    except Exception as exc:
+        raise HTTPException(400, str(exc))
+
+
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-@app.get("/")
-async def main():
-    content = """
-<body>
-<form action="/files/" enctype="multipart/form-data" method="post">
-<input name="files" type="file" multiple>
-<input type="submit">
-</form>
-<form action="/uploadfiles/" enctype="multipart/form-data" method="post">
-<input name="files" type="file" multiple>
-<input type="submit">
-</form>
-</body>
-    """
-    return HTMLResponse(content=content)
